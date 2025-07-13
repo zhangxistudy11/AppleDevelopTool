@@ -13,7 +13,6 @@ struct TextFilterView: View {
         let id = UUID()
         var keywords: String = ""
         var logic: FilterLogic = .or
-        var isEnabled: Bool = true
     }
     
     enum FilterLogic: String, CaseIterable {
@@ -216,7 +215,7 @@ struct TextFilterView: View {
     
     private func hasValidRules() -> Bool {
         return filterRules.contains { rule in
-            rule.isEnabled && !rule.keywords.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            !rule.keywords.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
     }
     
@@ -231,7 +230,7 @@ struct TextFilterView: View {
     
     private func filterText() -> [FilteredLine] {
         let lines = originalText.components(separatedBy: .newlines)
-        let enabledRules = filterRules.filter { $0.isEnabled && !$0.keywords.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        let enabledRules = filterRules.filter { !$0.keywords.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         
         var results: [FilteredLine] = []
         
@@ -313,11 +312,6 @@ struct FilterRuleView: View {
     var body: some View {
         VStack(spacing: 8) {
             HStack {
-                // 启用开关
-                Toggle("", isOn: $rule.isEnabled)
-                    .toggleStyle(.switch)
-                    .scaleEffect(0.8)
-                
                 // 逻辑选择器
                 Picker("逻辑", selection: $rule.logic) {
                     ForEach(TextFilterView.FilterLogic.allCases, id: \.self) { logic in
@@ -344,16 +338,15 @@ struct FilterRuleView: View {
             TextField("输入关键词（每行一个）", text: $rule.keywords, axis: .vertical)
                 .textFieldStyle(.roundedBorder)
                 .lineLimit(3...6)
-                .disabled(!rule.isEnabled)
         }
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(rule.isEnabled ? Color(NSColor.controlBackgroundColor) : Color(NSColor.controlBackgroundColor).opacity(0.5))
+                .fill(Color(NSColor.controlBackgroundColor))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(rule.isEnabled ? rule.logic.color.opacity(0.3) : Color(NSColor.separatorColor), lineWidth: 1)
+                .stroke(rule.logic.color.opacity(0.3), lineWidth: 1)
         )
     }
 }
@@ -381,25 +374,9 @@ struct FilteredLineView: View {
                 .padding(.top, 2)
             
             // 内容
-            VStack(alignment: .leading, spacing: 4) {
-                Text(highlightedText)
-                    .font(.system(size: 13, design: .monospaced))
-                    .textSelection(.enabled)
-                
-                if !line.matchedKeywords.isEmpty {
-                    HStack(spacing: 8) {
-                        ForEach(line.matchedKeywords, id: \.self) { keyword in
-                            Text(keyword)
-                                .font(.caption)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.blue.opacity(0.1))
-                                .foregroundColor(.blue)
-                                .cornerRadius(4)
-                        }
-                    }
-                }
-            }
+            Text(highlightedText)
+                .font(.system(size: 13, design: .monospaced))
+                .textSelection(.enabled)
             
             Spacer()
             
