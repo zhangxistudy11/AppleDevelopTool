@@ -4,11 +4,37 @@ import UniformTypeIdentifiers
 struct TextFilterView: View {
     @State private var originalText = ""
     @State private var includeKeywords = ""
-    @State private var excludeKeywords = ""
+    @State private var includeLogic: FilterLogic = .or
     @State private var filteredResults: [FilteredLine] = []
     @State private var isFiltering = false
     @State private var showingFilePicker = false
     @State private var showingExportSheet = false
+    
+    enum FilterLogic: String, CaseIterable {
+        case and = "与关系 (AND)"
+        case or = "或关系 (OR)"
+        
+        var description: String {
+            switch self {
+            case .and: return "必须包含所有关键词"
+            case .or: return "包含任一关键词即可"
+            }
+        }
+        
+        var icon: String {
+            switch self {
+            case .and: return "checkmark.circle.fill"
+            case .or: return "plus.circle.fill"
+            }
+        }
+        
+        var color: Color {
+            switch self {
+            case .and: return .green
+            case .or: return .blue
+            }
+        }
+    }
     
     var body: some View {
         HStack(spacing: 0) {
@@ -57,7 +83,8 @@ struct TextFilterView: View {
             // 右侧：筛选条件和结果
             VStack(spacing: 0) {
                 // 筛选条件设置区域
-                VStack(spacing: 16) {
+                VStack(spacing: 20) {
+                    // 标题区域
                     HStack {
                         Text("筛选条件")
                             .font(.headline)
@@ -67,86 +94,116 @@ struct TextFilterView: View {
                         
                         Button("清除条件") {
                             includeKeywords = ""
-                            excludeKeywords = ""
+                            includeLogic = .or
                             filteredResults = []
                         }
                         .buttonStyle(.bordered)
-                        .disabled(includeKeywords.isEmpty && excludeKeywords.isEmpty)
+                        .disabled(includeKeywords.isEmpty)
                     }
                     
-                    VStack(spacing: 12) {
-                        // 包含关键词
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.green)
-                                    .font(.caption)
-                                Text("包含关键词")
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
+                    // 筛选逻辑选择区域
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Image(systemName: "slider.horizontal.3")
+                                .foregroundColor(.blue)
+                                .font(.title3)
+                            Text("筛选逻辑")
+                                .font(.title3)
+                                .fontWeight(.semibold)
+                        }
+                        
+                        HStack(spacing: 16) {
+                            ForEach(FilterLogic.allCases, id: \.self) { logic in
+                                LogicCard(
+                                    logic: logic,
+                                    isSelected: includeLogic == logic,
+                                    action: { includeLogic = logic }
+                                )
                             }
+                        }
+                    }
+                    .padding(16)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                    )
+                    
+                    // 关键词输入区域
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Image(systemName: "magnifyingglass.circle.fill")
+                                .foregroundColor(.orange)
+                                .font(.title3)
+                            Text("关键词设置")
+                                .font(.title3)
+                                .fontWeight(.semibold)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("请输入要筛选的关键词（每行一个）")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
                             
                             TextEditor(text: $includeKeywords)
                                 .font(.system(size: 13))
-                                .frame(height: 80)
-                                .padding(8)
-                                .background(Color(NSColor.controlBackgroundColor))
-                                .cornerRadius(6)
+                                .frame(height: 100)
+                                .padding(12)
+                                .background(Color(NSColor.windowBackgroundColor))
+                                .cornerRadius(8)
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .stroke(Color(NSColor.separatorColor), lineWidth: 1)
-                                )
-                        }
-                        
-                        // 不包含关键词
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundColor(.red)
-                                    .font(.caption)
-                                Text("不包含关键词")
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
-                            }
-                            
-                            TextEditor(text: $excludeKeywords)
-                                .font(.system(size: 13))
-                                .frame(height: 80)
-                                .padding(8)
-                                .background(Color(NSColor.controlBackgroundColor))
-                                .cornerRadius(6)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 6)
+                                    RoundedRectangle(cornerRadius: 8)
                                         .stroke(Color(NSColor.separatorColor), lineWidth: 1)
                                 )
                         }
                     }
+                    .padding(16)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                    )
                     
-                    // 操作按钮
-                    HStack(spacing: 12) {
+                    // 操作按钮区域
+                    VStack(spacing: 12) {
                         Button(action: startFiltering) {
-                            HStack(spacing: 6) {
+                            HStack(spacing: 8) {
                                 if isFiltering {
                                     ProgressView()
                                         .scaleEffect(0.8)
                                 } else {
-                                    Image(systemName: "magnifyingglass")
+                                    Image(systemName: "play.fill")
                                 }
                                 Text("开始筛选")
+                                    .fontWeight(.medium)
                             }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
                         }
                         .buttonStyle(.borderedProminent)
-                        .disabled(originalText.isEmpty || (includeKeywords.isEmpty && excludeKeywords.isEmpty))
+                        .disabled(originalText.isEmpty || includeKeywords.isEmpty)
                         
-                        Button("导出结果") {
-                            showingExportSheet = true
+                        HStack(spacing: 12) {
+                            Button("导出结果") {
+                                showingExportSheet = true
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(filteredResults.isEmpty)
+                            
+                            Spacer()
+                            
+                            if !filteredResults.isEmpty {
+                                Text("找到 \(filteredResults.count) 行匹配")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
                         }
-                        .buttonStyle(.bordered)
-                        .disabled(filteredResults.isEmpty)
                     }
                 }
                 .padding(20)
-                .background(Color(NSColor.controlBackgroundColor))
+                .background(Color(NSColor.windowBackgroundColor))
                 
                 Divider()
                 
@@ -179,7 +236,7 @@ struct TextFilterView: View {
                                 .font(.title3)
                                 .foregroundColor(.secondary)
                             
-                            Text("请输入文本和筛选条件，然后点击开始筛选")
+                            Text("请输入文本和关键词，然后点击开始筛选")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                                 .multilineTextAlignment(.center)
@@ -231,7 +288,6 @@ struct TextFilterView: View {
     private func filterText() -> [FilteredLine] {
         let lines = originalText.components(separatedBy: .newlines)
         let includeKeywordsList = includeKeywords.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        let excludeKeywordsList = excludeKeywords.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         
         var results: [FilteredLine] = []
         
@@ -244,24 +300,9 @@ struct TextFilterView: View {
             
             // 检查包含关键词
             if !includeKeywordsList.isEmpty {
-                shouldInclude = false
-                for keyword in includeKeywordsList {
-                    let trimmedKeyword = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !trimmedKeyword.isEmpty && trimmedLine.localizedCaseInsensitiveContains(trimmedKeyword) {
-                        shouldInclude = true
-                        matchedKeywords.append(trimmedKeyword)
-                    }
-                }
-            }
-            
-            // 检查不包含关键词
-            if shouldInclude && !excludeKeywordsList.isEmpty {
-                for keyword in excludeKeywordsList {
-                    let trimmedKeyword = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !trimmedKeyword.isEmpty && trimmedLine.localizedCaseInsensitiveContains(trimmedKeyword) {
-                        shouldInclude = false
-                        break
-                    }
+                shouldInclude = checkIncludeKeywords(trimmedLine, keywords: includeKeywordsList, logic: includeLogic)
+                if shouldInclude {
+                    matchedKeywords = getMatchedKeywords(trimmedLine, keywords: includeKeywordsList)
                 }
             }
             
@@ -275,6 +316,30 @@ struct TextFilterView: View {
         }
         
         return results
+    }
+    
+    private func checkIncludeKeywords(_ line: String, keywords: [String], logic: FilterLogic) -> Bool {
+        switch logic {
+        case .and:
+            // 与关系：必须包含所有关键词
+            return keywords.allSatisfy { keyword in
+                let trimmedKeyword = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
+                return !trimmedKeyword.isEmpty && line.localizedCaseInsensitiveContains(trimmedKeyword)
+            }
+        case .or:
+            // 或关系：包含任一关键词即可
+            return keywords.contains { keyword in
+                let trimmedKeyword = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
+                return !trimmedKeyword.isEmpty && line.localizedCaseInsensitiveContains(trimmedKeyword)
+            }
+        }
+    }
+    
+    private func getMatchedKeywords(_ line: String, keywords: [String]) -> [String] {
+        return keywords.filter { keyword in
+            let trimmedKeyword = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
+            return !trimmedKeyword.isEmpty && line.localizedCaseInsensitiveContains(trimmedKeyword)
+        }
     }
     
     private func loadTextFromFile(_ file: URL) {
@@ -363,6 +428,47 @@ struct FilteredLineView: View {
         }
         
         return attributedString
+    }
+}
+
+// 逻辑选择卡片
+struct LogicCard: View {
+    let logic: TextFilterView.FilterLogic
+    let isSelected: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 8) {
+                Image(systemName: logic.icon)
+                    .font(.title2)
+                    .foregroundColor(isSelected ? .white : logic.color)
+                
+                VStack(spacing: 4) {
+                    Text(logic.rawValue)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(isSelected ? .white : .primary)
+                    
+                    Text(logic.description)
+                        .font(.caption2)
+                        .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+                        .multilineTextAlignment(.center)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .padding(.horizontal, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isSelected ? logic.color : Color(NSColor.controlBackgroundColor))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(isSelected ? logic.color : Color(NSColor.separatorColor), lineWidth: isSelected ? 2 : 1)
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 
