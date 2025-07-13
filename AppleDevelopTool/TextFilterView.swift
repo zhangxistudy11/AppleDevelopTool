@@ -3,13 +3,13 @@ import UniformTypeIdentifiers
 
 struct TextFilterView: View {
     @State private var originalText = ""
-    @State private var filterRules: [FilterRule] = [FilterRule()]
+    @State private var keywordGroups: [KeywordGroup] = [KeywordGroup()]
     @State private var filteredResults: [FilteredLine] = []
     @State private var isFiltering = false
     @State private var showingFilePicker = false
     @State private var showingExportSheet = false
     
-    struct FilterRule: Identifiable {
+    struct KeywordGroup: Identifiable {
         let id = UUID()
         var keywords: String = ""
         var logic: FilterLogic = .or
@@ -19,10 +19,24 @@ struct TextFilterView: View {
         case and = "AND"
         case or = "OR"
         
+        var description: String {
+            switch self {
+            case .and: return "必须包含所有关键词"
+            case .or: return "包含任一关键词即可"
+            }
+        }
+        
         var color: Color {
             switch self {
             case .and: return .green
             case .or: return .blue
+            }
+        }
+        
+        var icon: String {
+            switch self {
+            case .and: return "checkmark.circle.fill"
+            case .or: return "plus.circle.fill"
             }
         }
     }
@@ -76,36 +90,70 @@ struct TextFilterView: View {
                 // 筛选条件设置区域
                 VStack(spacing: 16) {
                     HStack {
-                        Text("筛选规则")
+                        Text("筛选条件")
                             .font(.headline)
                             .fontWeight(.semibold)
                         
                         Spacer()
                         
-                        Button("添加规则") {
-                            filterRules.append(FilterRule())
+                        Button("添加条件组") {
+                            keywordGroups.append(KeywordGroup())
                         }
                         .buttonStyle(.bordered)
                         
-                        Button("清空规则") {
-                            filterRules = [FilterRule()]
+                        Button("清空条件") {
+                            keywordGroups = [KeywordGroup()]
                             filteredResults = []
                         }
                         .buttonStyle(.bordered)
-                        .disabled(filterRules.count <= 1)
+                        .disabled(keywordGroups.count <= 1)
                     }
                     
-                    // 筛选规则列表
-                    VStack(spacing: 12) {
-                        ForEach(Array(filterRules.enumerated()), id: \.element.id) { index, rule in
-                            FilterRuleView(
-                                rule: $filterRules[index],
+                    // 逻辑说明
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Image(systemName: "info.circle.fill")
+                                .foregroundColor(.blue)
+                                .font(.caption)
+                            Text("筛选逻辑说明")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("• AND：必须包含该组中的所有关键词")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text("• OR：包含该组中任一关键词即可")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text("• 多个条件组之间为AND关系")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.leading, 20)
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 12)
+                    .background(Color.blue.opacity(0.05))
+                    .cornerRadius(6)
+                    
+                    // 关键词组列表
+                    VStack(spacing: 16) {
+                        ForEach(Array(keywordGroups.enumerated()), id: \.element.id) { index, group in
+                            KeywordGroupView(
+                                group: $keywordGroups[index],
                                 onDelete: {
-                                    if filterRules.count > 1 {
-                                        filterRules.remove(at: index)
+                                    if keywordGroups.count > 1 {
+                                        keywordGroups.remove(at: index)
                                     }
                                 }
                             )
+                            
+                            // 在组之间显示逻辑选择器（除了最后一个）
+                            if index < keywordGroups.count - 1 {
+                                LogicSelectorView(logic: $keywordGroups[index].logic)
+                            }
                         }
                     }
                     
@@ -123,7 +171,7 @@ struct TextFilterView: View {
                             }
                         }
                         .buttonStyle(.borderedProminent)
-                        .disabled(originalText.isEmpty || !hasValidRules())
+                        .disabled(originalText.isEmpty || !hasValidGroups())
                         
                         Button("导出结果") {
                             showingExportSheet = true
@@ -174,7 +222,7 @@ struct TextFilterView: View {
                                 .font(.title3)
                                 .foregroundColor(.secondary)
                             
-                            Text("请输入文本和筛选规则，然后点击开始筛选")
+                            Text("请输入文本和筛选条件，然后点击开始筛选")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                                 .multilineTextAlignment(.center)
@@ -213,9 +261,9 @@ struct TextFilterView: View {
         }
     }
     
-    private func hasValidRules() -> Bool {
-        return filterRules.contains { rule in
-            !rule.keywords.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    private func hasValidGroups() -> Bool {
+        return keywordGroups.contains { group in
+            !group.keywords.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
     }
     
@@ -230,7 +278,7 @@ struct TextFilterView: View {
     
     private func filterText() -> [FilteredLine] {
         let lines = originalText.components(separatedBy: .newlines)
-        let enabledRules = filterRules.filter { !$0.keywords.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        let validGroups = keywordGroups.filter { !$0.keywords.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         
         var results: [FilteredLine] = []
         
@@ -238,8 +286,8 @@ struct TextFilterView: View {
             let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmedLine.isEmpty { continue }
             
-            if shouldIncludeLine(trimmedLine, rules: enabledRules) {
-                let matchedKeywords = getMatchedKeywords(trimmedLine, rules: enabledRules)
+            if shouldIncludeLine(trimmedLine, groups: validGroups) {
+                let matchedKeywords = getMatchedKeywords(trimmedLine, groups: validGroups)
                 results.append(FilteredLine(
                     lineNumber: index + 1,
                     content: line,
@@ -251,17 +299,17 @@ struct TextFilterView: View {
         return results
     }
     
-    private func shouldIncludeLine(_ line: String, rules: [FilterRule]) -> Bool {
-        guard !rules.isEmpty else { return true }
+    private func shouldIncludeLine(_ line: String, groups: [KeywordGroup]) -> Bool {
+        guard !groups.isEmpty else { return true }
         
-        // 所有规则都是AND关系
-        return rules.allSatisfy { rule in
-            let keywords = rule.keywords.components(separatedBy: .newlines)
+        // 所有组之间都是AND关系
+        return groups.allSatisfy { group in
+            let keywords = group.keywords.components(separatedBy: .newlines)
                 .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             
             if keywords.isEmpty { return true }
             
-            switch rule.logic {
+            switch group.logic {
             case .and:
                 // 必须包含所有关键词
                 return keywords.allSatisfy { keyword in
@@ -276,11 +324,11 @@ struct TextFilterView: View {
         }
     }
     
-    private func getMatchedKeywords(_ line: String, rules: [FilterRule]) -> [String] {
+    private func getMatchedKeywords(_ line: String, groups: [KeywordGroup]) -> [String] {
         var matchedKeywords: [String] = []
         
-        for rule in rules {
-            let keywords = rule.keywords.components(separatedBy: .newlines)
+        for group in groups {
+            let keywords = group.keywords.components(separatedBy: .newlines)
                 .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             
             for keyword in keywords {
@@ -304,24 +352,18 @@ struct TextFilterView: View {
     }
 }
 
-// 筛选规则视图
-struct FilterRuleView: View {
-    @Binding var rule: TextFilterView.FilterRule
+// 关键词组视图
+struct KeywordGroupView: View {
+    @Binding var group: TextFilterView.KeywordGroup
     let onDelete: () -> Void
     
     var body: some View {
         VStack(spacing: 8) {
             HStack {
-                // 逻辑选择器
-                Picker("逻辑", selection: $rule.logic) {
-                    ForEach(TextFilterView.FilterLogic.allCases, id: \.self) { logic in
-                        Text(logic.rawValue)
-                            .foregroundColor(logic.color)
-                            .tag(logic)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 80)
+                Text("关键词组")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.secondary)
                 
                 Spacer()
                 
@@ -335,7 +377,7 @@ struct FilterRuleView: View {
             }
             
             // 关键词输入
-            TextField("输入关键词（每行一个）", text: $rule.keywords, axis: .vertical)
+            TextField("输入关键词（每行一个）", text: $group.keywords, axis: .vertical)
                 .textFieldStyle(.roundedBorder)
                 .lineLimit(3...6)
         }
@@ -346,8 +388,54 @@ struct FilterRuleView: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(rule.logic.color.opacity(0.3), lineWidth: 1)
+                .stroke(Color(NSColor.separatorColor), lineWidth: 1)
         )
+    }
+}
+
+// 逻辑选择器视图
+struct LogicSelectorView: View {
+    @Binding var logic: TextFilterView.FilterLogic
+    
+    var body: some View {
+        HStack {
+            Spacer()
+            
+            VStack(spacing: 8) {
+                // 逻辑选择器
+                Picker("逻辑", selection: $logic) {
+                    ForEach(TextFilterView.FilterLogic.allCases, id: \.self) { logic in
+                        HStack {
+                            Image(systemName: logic.icon)
+                                .foregroundColor(logic.color)
+                            Text(logic.rawValue)
+                                .foregroundColor(logic.color)
+                        }
+                        .tag(logic)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 120)
+                
+                // 逻辑说明
+                Text(logic.description)
+                    .font(.caption)
+                    .foregroundColor(logic.color)
+                    .fontWeight(.medium)
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(logic.color.opacity(0.1))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(logic.color.opacity(0.3), lineWidth: 1)
+            )
+            
+            Spacer()
+        }
     }
 }
 
